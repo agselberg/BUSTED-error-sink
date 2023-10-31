@@ -1,0 +1,152 @@
+"""
+BUSTED-PH SNAKEFILE TO RUN OG BUSTED TO EMULATE BUSTED-PH
+USED BUSTED'S 'ERROR SINK MODE' 
+
+@Author: Avery Selberg
+
+2023
+"""
+
+#----------------------------------------------------------------------------
+# Description
+#----------------------------------------------------------------------------
+import os
+import sys
+import json
+import csv
+from pathlib import Path
+import glob
+#----------------------------------------------------------------------------
+# Declares
+#----------------------------------------------------------------------------
+
+with open('config_error.json', 'r') as input_cf:
+	config = json.load(input_cf)
+
+#----------------------------------------------------------------------------
+# Settings
+#----------------------------------------------------------------------------
+BASEDIR = os.getcwd()
+
+# Which project are we analyzing?
+DATA_DIRECTORY = config["data_directory"]
+
+
+gene_names = ["ATPalpha1", "GH19_chitinase", "lysozyme", "og3737", "og9103", "og9298", "PAP", "PCK", "PEPC2", "prestin", "RNASE1", "RNaseT2"]
+#gene_names = ['mitogene']
+#print(gene_names)
+
+HYPHY    = config["hyphy"]
+RES      = config["res"]
+HYPHY_ANALYSES = config["hyphy-analyses"]
+
+OUTDIR = config["results_directory"] 
+#print(OUTDIR)
+
+BUSTED_PH_BF = os.path.join(HYPHY_ANALYSES, "BUSTED-PH", "BUSTED-PH.bf")
+#FILTER_OUTLIERS_BF = os.path.join(HYPHY_ANALYSES, "find-outliers", "find-outliers-slac.bf")
+#LAB_MRCA_BF = os.path.join(DATA_DIRECTORY, "label-tree.bf")
+LAB_TREE = os.path.join(HYPHY_ANALYSES, "LabelTrees", "label-tree.bf")
+
+# Create output directories
+Path(OUTDIR).mkdir(parents=True, exist_ok=True)
+
+
+#---------------------------------------------------------------------------- 
+# rule all
+#----------------------------------------------------------------------------
+
+rule all:
+    input: 
+        expand(os.path.join(OUTDIR, "{GENE}-lab.nwk"), GENE = gene_names),
+        expand(os.path.join(OUTDIR, "{GENE}-fg.BUSTED-E.json"), GENE = gene_names),
+        expand(os.path.join(OUTDIR, "{GENE}-bg.BUSTED-E.json"), GENE = gene_names),
+        expand(os.path.join(OUTDIR, "{GENE}-fg.BUSTED.json"), GENE = gene_names),
+        expand(os.path.join(OUTDIR, "{GENE}-bg.BUSTED.json"), GENE = gene_names)
+ #end input 
+#end rule 
+
+
+#---------------------------------------------------------------------------- 
+# Run LABEL TREE 
+#---------------------------------------------------------------------------- 
+
+rule label_tree:
+    input:
+        #seq = os.path.join(DATA_DIRECTORY, "{GENE}", 'alignment.fa'),
+        tree = os.path.join(DATA_DIRECTORY, "{GENE}", "tree.nwk"),
+        list = os.path.join(DATA_DIRECTORY, "{GENE}", "foreground_species.txt")
+    output:
+        tree = os.path.join(OUTDIR, "{GENE}-lab.nwk")
+    shell:
+        """
+        {HYPHY} LIBPATH={RES} {LAB_TREE} --tree {input.tree} --list {input.list} --output {output.tree} --label FOREGROUND
+        """
+
+#---------------------------------------------------------------------------- 
+# Run BUSTED WITH ERROR SINK COMPONENET
+#---------------------------------------------------------------------------- 
+## RUN BUSTED ON FOREGROUND BRANCHES##
+rule busted_e_fg:
+    input:
+        seq = os.path.join(DATA_DIRECTORY, "{GENE}", 'alignment.fa'),
+        tree = rules.label_tree.output.tree 
+    output:
+        json = os.path.join(OUTDIR, "{GENE}-fg.BUSTED-E.json"), 
+        fits = os.path.join(OUTDIR, "{GENE}-fg.BUSTED-E-fit.lf")
+    shell:
+         """
+         {HYPHY} LIBPATH={RES} BUSTED --alignment {input.seq} --tree {input.tree} --branches FOREGROUND --srv Yes --starting-points 5 --output {output.json} --error-sink Yes --save-fit {output.fits}
+         """
+## RUN BUSTED ON BACKGROUND BRANCHES##
+###end rule 
+
+rule busted_e_bg:
+    input:
+        seq = os.path.join(DATA_DIRECTORY, "{GENE}", 'alignment.fa'),
+        tree = rules.label_tree.output.tree 
+    output:
+        json = os.path.join(OUTDIR, "{GENE}-bg.BUSTED-E.json"), 
+        fits = os.path.join(OUTDIR, "{GENE}-bg.BUSTED-E.fit.lf")
+    shell:
+         """
+         {HYPHY} LIBPATH={RES} BUSTED --alignment {input.seq} --tree {input.tree} --branches 'Unlabeled branches' --srv Yes --starting-points 5 --output {output.json} --error-sink Yes --save-fit {output.fits}
+         """
+###end rule 
+
+
+#---------------------------------------------------------------------------- 
+# Run BUSTED WITHOUT ERROR SINK COMPONENET
+#---------------------------------------------------------------------------- 
+## RUN BUSTED ON FOREGROUND BRANCHES##
+rule busted_fg:
+    input:
+        seq = os.path.join(DATA_DIRECTORY, "{GENE}", 'alignment.fa'),
+        tree = rules.label_tree.output.tree 
+    output:
+        json = os.path.join(OUTDIR, "{GENE}-fg.BUSTED.json"), 
+        fits = os.path.join(OUTDIR, "{GENE}-fg.BUSTED-fit.lf")
+    shell:
+         """
+         {HYPHY} LIBPATH={RES} BUSTED --alignment {input.seq} --tree {input.tree} --branches FOREGROUND --srv Yes --starting-points 5 --output {output.json} --save-fit {output.fits}
+         """
+## RUN BUSTED ON BACKGROUND BRANCHES##
+###end rule 
+
+rule busted_bg:
+    input:
+        seq = os.path.join(DATA_DIRECTORY, "{GENE}", 'alignment.fa'),
+        tree = rules.label_tree.output.tree 
+    output:
+        json = os.path.join(OUTDIR, "{GENE}-bg.BUSTED.json"), 
+        fits = os.path.join(OUTDIR, "{GENE}-bg.BUSTED.fit.lf")
+    shell:
+         """
+         {HYPHY} LIBPATH={RES} BUSTED --alignment {input.seq} --tree {input.tree} --branches 'Unlabeled branches' --srv Yes --starting-points 5 --output {output.json} --save-fit {output.fits}
+         """
+###end rule 
+#----------------------------------------------------------------------------
+# End of file
+#----------------------------------------------------------------------------
+
+

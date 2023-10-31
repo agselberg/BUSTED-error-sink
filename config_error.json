@@ -1,0 +1,7 @@
+{
+    "hyphy" : "/home/agselberg/hyphy-develop/hyphy", 
+    "res" : "/home/agselberg/hyphy-develop/res",
+    "data_directory" : "/home/agselberg/compare_BUSTED/datasets/pollock/",
+	"results_directory" : "/home/agselberg/compare_BUSTED/datasets/pollock/bph_error_results",
+    "hyphy-analyses" : "/home/agselberg/hyphy-analyses"
+}
